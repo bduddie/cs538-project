@@ -45,6 +45,8 @@ these commands in the shell:
 
 ```
 $ git clone https://github.com/bduddie/cs538-project
+$ sudo apt-get update && sudo apt-get install python3-pip
+$ pip3 install dnslib
 $ cd pox
 $ git fetch && git checkout eel && git reset --hard 0cc9de5d2bc95ebc1cf232b21d788ba931faa6d0
 $ cd ~/cs538-project
