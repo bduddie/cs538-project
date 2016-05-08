@@ -1,4 +1,4 @@
-# Private addressing using OpenFlow proof-of-concept
+# Private addressing using OpenFlow
 
 This project contains a proof-of-concept for a system whereby access can be
 restricted to certain hosts, created as part of a final project for CS538
