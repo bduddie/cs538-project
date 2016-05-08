@@ -4,17 +4,15 @@ import base64
 from dnslib import DNSRecord, DNSError
 import json
 from socketserver import DatagramRequestHandler, ThreadingUDPServer
-from socket import socket, AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM
+from socket import socket, AF_INET, SOCK_DGRAM, SOCK_STREAM
 import ssl
 import threading
 
+from sdns_config import SDNS_HOST, SDNS_PORT
 
 PUBLIC_DNS_ADDR_V4 = "8.8.8.8"
 PUBLIC_DNS_ADDR_V6 = "2001:4860:4860::8888"
 PUBLIC_DNS_PORT = 53
-
-SDNS_HOST = "localhost"
-SDNS_PORT = 2098
 
 # The hostname suffix for services hosted on the internal network, e.g. any domain matching *.sec.mycompany.com would
 # be an internal secured service that can only be accessed via SDNS
@@ -30,8 +28,13 @@ class LocalDNSRequestHandler(DatagramRequestHandler):
         req_bin, client_sock = self.request
 
         # Forward the same request to the public DNS server
-        sock = socket(AF_INET6, SOCK_DGRAM)
-        sock.sendto(req_bin, (PUBLIC_DNS_ADDR_V6, PUBLIC_DNS_PORT))
+        # Use these two lines if your machine supports native IPv6 connectivity to the internet
+        #sock = socket(AF_INET6, SOCK_DGRAM)
+        #sock.sendto(req_bin, (PUBLIC_DNS_ADDR_V6, PUBLIC_DNS_PORT))
+        # Otherwise, use these two for IPv4
+        sock = socket(AF_INET, SOCK_DGRAM)
+        sock.sendto(req_bin, (PUBLIC_DNS_ADDR_V4, PUBLIC_DNS_PORT))
+
         resp = sock.recv(4096)
         sock.close()
 
@@ -53,7 +56,7 @@ class LocalDNSRequestHandler(DatagramRequestHandler):
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
 
-        with ssl_context.wrap_socket(socket(AF_INET6, SOCK_STREAM)) as sdns_sock:
+        with ssl_context.wrap_socket(socket(AF_INET, SOCK_STREAM)) as sdns_sock:
             sdns_sock.connect((SDNS_HOST, SDNS_PORT))
             # Append trailing newline to indicate the end of the request
             payload = bytes(json.dumps(sdns_req) + "\n", "ascii")
@@ -108,7 +111,7 @@ def send_req_and_print_resp(packet, port):
 
 
 def send_test_query_sdns(port):
-    req = DNSRecord.question("xyzmail.sec.mycompany.com", qtype="AAAA")
+    req = DNSRecord.question("xyzmail.sec.mycompany.com", qtype="A")
 
     print("\nIssuing client request (sdns)...")
     send_req_and_print_resp(req.pack(), port)
@@ -116,7 +119,7 @@ def send_test_query_sdns(port):
 
 def send_test_query_public(port):
     # Request the v6 address of google.com
-    req = DNSRecord.question("google.com", qtype="AAAA")
+    req = DNSRecord.question("google.com", qtype="A")
 
     print("Issuing client request (public)...")
     send_req_and_print_resp(req.pack(), port)
@@ -132,7 +135,7 @@ if __name__ == "__main__":
     # TODO: for testing, send a sample request, then exit... final implementation would just run serve_forever() in the
     # main thread
     send_test_query_sdns(LISTEN_PORT)
-    send_test_query_public(LISTEN_PORT)
+    #send_test_query_public(LISTEN_PORT)
 
     server.shutdown()
     server.server_close()

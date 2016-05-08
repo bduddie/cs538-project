@@ -1,32 +1,29 @@
-# Proof-of-concept SDNS server implementation
+#
+# Proof-of-concept SDNS server implementation (responds to lookup requests with virtual IP addresses; would also need
+# to authenticate requesting users)
+#
 import base64
-from dnslib import AAAA, DNSRecord, DNSError, QTYPE, RR
+from dnslib import A, DNSRecord, DNSError, QTYPE, RR
 import json
 from socketserver import StreamRequestHandler, ThreadingTCPServer
-from socket import AF_INET6
+from socket import AF_INET
 import ssl
 
-SDNS_PORT = 2098
-
-IPV6_GLOBAL_ID = "5f:4934:d08b"
-IPV6_SUBNET_ID = "d943"
+from sdns_config import SDNS_HOST, SDNS_PORT, VIRTUAL_ADDR_PREFIX_V4
 
 # Time-to-live given for all lookup requests (in seconds)
-DNS_TTL = 12 * 60 * 60
+DNS_TTL = 30 * 60
 
-def make_private_ipv6_addr(host_id):
-    """
-    Builds a string representing a complete private IPv6 address
-    :param host_id: string representing the 48-bit host-specific part of the address, e.g. "::1" or "0000:0000:0001"
-    :return: IPv6 address string
-    """
-    # First 16 bytes after subnet ID are always 0, indicating a private address
-    return "fd" + IPV6_GLOBAL_ID + ":" + IPV6_SUBNET_ID + "::" + host_id
 
-# Super-simple look-up table of hostname to private IPv6 address
+def make_virtual_ipv4_addr(host_id):
+    return VIRTUAL_ADDR_PREFIX_V4 + str(host_id)
+
+
+# Super-simple look-up table of hostname to virtual IPv4 address
+# Only relevant for the simulation setup; these would normally be generated randomly
 DNS_RECORDS = {
-    "xyzmail.sec.mycompany.com.": make_private_ipv6_addr("::1"),
-    "private-files.sec.mycompany.com.": make_private_ipv6_addr("::2"),
+    "xyzmail.sec.mycompany.com.": make_virtual_ipv4_addr(4),
+    "private-files.sec.mycompany.com.": make_virtual_ipv4_addr(4),
 }
 
 
@@ -70,21 +67,20 @@ class SDNSRequestHandler(StreamRequestHandler):
 
         # Only looking at first question part
         q = dns_query.get_q()
-        if q.qtype != QTYPE.AAAA:
-            print("Error: Unexpected query type {} (only AAAA/IPv6 lookup supported)".format(q.qtype))
+        if q.qtype != QTYPE.A:
+            print("Error: Unexpected query type {} (only A/IPv4 lookup supported)".format(q.qtype))
             self.send_error_rsp("Invalid query type")
             return
 
-        # Note: this is a very simplistic implementation that only returns AAAA records
+        # Note: this is a very simplistic implementation that only returns A records
         hostname = q.qname.idna()
         dns_response = dns_query.reply()
         if hostname in DNS_RECORDS:
-            priv_addr = DNS_RECORDS[hostname]
+            virt_addr = DNS_RECORDS[hostname]
 
-            # TODO: generate the virtual IP and install rules into OF switches to map to private addresses to/from
-            # virtual ones, then return the assigned virtual IP... just returning the private IP for now
-
-            dns_response.add_answer(RR(rname=hostname, rtype=QTYPE.AAAA, ttl=DNS_TTL, rdata=AAAA(priv_addr)))
+            # TODO: would generate virtual IP here and communicate with OF controller to install mapping to private IP;
+            # for the simulation, we are hard-coding this part and not implementing communication with the OF controller
+            dns_response.add_answer(RR(rname=hostname, rtype=QTYPE.A, ttl=DNS_TTL, rdata=A(virt_addr )))
         else:
             # Domain not found
             dns_response.header.set_rcode("NXDOMAIN")
@@ -96,8 +92,8 @@ class SDNSRequestHandler(StreamRequestHandler):
         self.send_json(json_resp)
 
 
-class ThreadingIPv6SSLServer(ThreadingTCPServer):
-    address_family = AF_INET6
+class ThreadingIPv4SSLServer(ThreadingTCPServer):
+    address_family = AF_INET
 
     def __init__(self, server_address, RequestHandlerClass):
         super().__init__(server_address, RequestHandlerClass, bind_and_activate=False)
@@ -116,6 +112,6 @@ class ThreadingIPv6SSLServer(ThreadingTCPServer):
             raise
 
 if __name__ == "__main__":
-    server = ThreadingIPv6SSLServer(("localhost", SDNS_PORT), SDNSRequestHandler)
-    print("Listening on port {}...".format(SDNS_PORT))
+    server = ThreadingIPv4SSLServer((SDNS_HOST, SDNS_PORT), SDNSRequestHandler)
+    print("SDNS server listening on {}:{}".format(SDNS_HOST, SDNS_PORT))
     server.serve_forever()
