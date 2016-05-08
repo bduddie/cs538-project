@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eux
 
-python pox.py log.level --DEBUG misc.sdns-mapper > /tmp/pox.log 2>&1 &
+python ~/pox/pox.py log.level --DEBUG misc.sdns-mapper > /tmp/pox.log 2>&1 &
 POX_PID="$!"
 sleep 1
 
