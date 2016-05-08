@@ -136,8 +136,11 @@ fabric.properties
 # Let's just ignore the whole .idea folder for now...
 .idea/
 
-# Including mininet and pox in the local directory to aid development, but don't check them in
+# Including mininet and pox in the local directory to aid development, but don't check them in (except for the custom
+# POX file)
 mininet/
 pox.py
 pox/*
+!pox/misc
+pox/misc/*
 !pox/misc/sdns-mapper.py
